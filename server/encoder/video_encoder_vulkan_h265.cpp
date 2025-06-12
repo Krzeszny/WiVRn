@@ -18,11 +18,30 @@
  */
 #include "video_encoder_vulkan_h265.h"
 #include "encoder/encoder_settings.h"
-#include "util/u_logging.h"
 #include "utils/wivrn_vk_bundle.h"
+#include <vulkan/vulkan_structs.hpp>
 
-wivrn::video_encoder_vulkan_h265::video_encoder_vulkan_h265(wivrn_vk_bundle & vk, vk::Rect2D rect, vk::VideoEncodeCapabilitiesKHR encode_caps, float fps, uint64_t bitrate) :
-        video_encoder_vulkan(vk, rect, encode_caps, fps, bitrate),
+wivrn::video_encoder_vulkan_h265::video_encoder_vulkan_h265(
+        wivrn_vk_bundle & vk,
+        vk::Rect2D rect,
+        const vk::VideoCapabilitiesKHR & video_caps,
+        const vk::VideoEncodeCapabilitiesKHR & encode_caps,
+        float fps,
+        uint8_t stream_idx,
+        const encoder_settings & settings) :
+        video_encoder_vulkan(vk, rect, video_caps, encode_caps, fps, stream_idx, settings),
+        dec_pic_buf_mgr{},
+        tier_level{
+                .flags{
+                        .general_tier_flag = 0,
+                        .general_progressive_source_flag = 0,
+                        .general_interlaced_source_flag = 0,
+                        .general_non_packed_constraint_flag = 0,
+                        .general_frame_only_constraint_flag = 0,
+                },
+                .general_profile_idc = STD_VIDEO_H265_PROFILE_IDC_MAIN,
+                .general_level_idc = STD_VIDEO_H265_LEVEL_IDC_6_2, // FIXME: actual level
+        },
         vps{
                 .flags{
                         .vps_temporal_id_nesting_flag = 0,
@@ -37,6 +56,8 @@ wivrn::video_encoder_vulkan_h265::video_encoder_vulkan_h265(wivrn_vk_bundle & vk
                 .vps_num_units_in_tick = 0,
                 .vps_time_scale = 0,
                 .vps_num_ticks_poc_diff_one_minus1 = 0,
+                .pDecPicBufMgr = &dec_pic_buf_mgr,
+                .pProfileTierLevel = &tier_level,
         },
         sps{
                 .flags{
@@ -46,8 +67,8 @@ wivrn::video_encoder_vulkan_h265::video_encoder_vulkan_h265(wivrn_vk_bundle & vk
                         .sps_sub_layer_ordering_info_present_flag = 0,
                         .scaling_list_enabled_flag = 0,
                         .sps_scaling_list_data_present_flag = 0,
-                        .amp_enabled_flag = 0,
-                        .sample_adaptive_offset_enabled_flag = 0,
+                        .amp_enabled_flag = 1,
+                        .sample_adaptive_offset_enabled_flag = 1,
                         .pcm_enabled_flag = 0,
                         .pcm_loop_filter_disabled_flag = 0,
                         .long_term_ref_pics_present_flag = 0,
@@ -72,8 +93,8 @@ wivrn::video_encoder_vulkan_h265::video_encoder_vulkan_h265(wivrn_vk_bundle & vk
                         .intra_boundary_filtering_disabled_flag = 0,
                 },
                 .chroma_format_idc = STD_VIDEO_H265_CHROMA_FORMAT_IDC_420,
-                .pic_width_in_luma_samples = 0,
-                .pic_height_in_luma_samples = 0,
+                .pic_width_in_luma_samples = ((rect.extent.width + 63) / 64) * 64,
+                .pic_height_in_luma_samples = ((rect.extent.height + 63) / 64) * 64,
                 .sps_video_parameter_set_id = 0,
                 .sps_max_sub_layers_minus1 = 0,
                 .sps_seq_parameter_set_id = 0,
@@ -81,11 +102,11 @@ wivrn::video_encoder_vulkan_h265::video_encoder_vulkan_h265(wivrn_vk_bundle & vk
                 .bit_depth_chroma_minus8 = 0,
                 .log2_max_pic_order_cnt_lsb_minus4 = 0,
                 .log2_min_luma_coding_block_size_minus3 = 0,
-                .log2_diff_max_min_luma_coding_block_size = 0,
+                .log2_diff_max_min_luma_coding_block_size = 3,
                 .log2_min_luma_transform_block_size_minus2 = 0,
-                .log2_diff_max_min_luma_transform_block_size = 0,
-                .max_transform_hierarchy_depth_inter = 0,
-                .max_transform_hierarchy_depth_intra = 0,
+                .log2_diff_max_min_luma_transform_block_size = 3,
+                .max_transform_hierarchy_depth_inter = 4,
+                .max_transform_hierarchy_depth_intra = 4,
                 .num_short_term_ref_pic_sets = 0,
                 .num_long_term_ref_pics_sps = 0,
                 .pcm_sample_bit_depth_luma_minus1 = 0,
@@ -102,6 +123,8 @@ wivrn::video_encoder_vulkan_h265::video_encoder_vulkan_h265(wivrn_vk_bundle & vk
                 .conf_win_right_offset = 0,
                 .conf_win_top_offset = 0,
                 .conf_win_bottom_offset = 0,
+                .pProfileTierLevel = &tier_level,
+                .pDecPicBufMgr = &dec_pic_buf_mgr,
         },
         pps{
                 .flags =
@@ -195,10 +218,52 @@ std::vector<void *> wivrn::video_encoder_vulkan_h265::setup_slot_info(size_t dpb
 	return res;
 }
 
+static auto get_video_caps(vk::raii::PhysicalDevice & phys_dev)
+{
+	vk::StructureChain video_profile_info{
+	        vk::VideoProfileInfoKHR{
+	                .videoCodecOperation =
+	                        vk::VideoCodecOperationFlagBitsKHR::eEncodeH265,
+	                .chromaSubsampling = vk::VideoChromaSubsamplingFlagBitsKHR::e420,
+	                .lumaBitDepth = vk::VideoComponentBitDepthFlagBitsKHR::e8,
+	                .chromaBitDepth = vk::VideoComponentBitDepthFlagBitsKHR::e8,
+	        },
+	        vk::VideoEncodeH265ProfileInfoKHR{
+	                .stdProfileIdc = STD_VIDEO_H265_PROFILE_IDC_MAIN,
+	        },
+	        vk::VideoEncodeUsageInfoKHR{
+	                .videoUsageHints = vk::VideoEncodeUsageFlagBitsKHR::eStreaming,
+	                .videoContentHints = vk::VideoEncodeContentFlagBitsKHR::eRendered,
+	                .tuningMode = vk::VideoEncodeTuningModeKHR::eUltraLowLatency,
+	        }};
+
+	try
+	{
+		auto [video_caps, encode_caps, encode_h265_caps] =
+		        phys_dev.getVideoCapabilitiesKHR<
+		                vk::VideoCapabilitiesKHR,
+		                vk::VideoEncodeCapabilitiesKHR,
+		                vk::VideoEncodeH265CapabilitiesKHR>(video_profile_info.get());
+
+		return std::make_tuple(video_caps, encode_caps, encode_h265_caps, video_profile_info);
+	}
+	catch (...)
+	{}
+	// NVIDIA fails if the structure is there
+	video_profile_info.unlink<vk::VideoEncodeUsageInfoKHR>();
+	auto [video_caps, encode_caps, encode_h265_caps] =
+	        phys_dev.getVideoCapabilitiesKHR<
+	                vk::VideoCapabilitiesKHR,
+	                vk::VideoEncodeCapabilitiesKHR,
+	                vk::VideoEncodeH265CapabilitiesKHR>(video_profile_info.get());
+	return std::make_tuple(video_caps, encode_caps, encode_h265_caps, video_profile_info);
+}
+
 std::unique_ptr<wivrn::video_encoder_vulkan_h265> wivrn::video_encoder_vulkan_h265::create(
         wivrn_vk_bundle & vk,
         encoder_settings & settings,
-        float fps)
+        float fps,
+        uint8_t stream_idx)
 {
 	vk::Rect2D rect{
 	        .offset = {
@@ -211,13 +276,12 @@ std::unique_ptr<wivrn::video_encoder_vulkan_h265> wivrn::video_encoder_vulkan_h2
 	        },
 	};
 
-	auto [video_caps, encode_caps, encode_h265_caps] =
-	        vk.physical_device.getVideoCapabilitiesKHR<
-	                vk::VideoCapabilitiesKHR,
-	                vk::VideoEncodeCapabilitiesKHR,
-	                vk::VideoEncodeH265CapabilitiesKHR>(video_profile_info.get());
+	if (settings.bit_depth != 8)
+		throw std::runtime_error("Only 8-bit encoding is currently supported");
 
-	std::unique_ptr<video_encoder_vulkan_h265> self(new video_encoder_vulkan_h265(vk, rect, encode_caps, fps, settings.bitrate));
+	auto [video_caps, encode_caps, encode_h265_caps, video_profile_info] = get_video_caps(vk.physical_device);
+
+	std::unique_ptr<video_encoder_vulkan_h265> self(new video_encoder_vulkan_h265(vk, rect, video_caps, encode_caps, fps, stream_idx, settings));
 
 	vk::VideoEncodeH265SessionParametersAddInfoKHR h265_add_info{};
 	h265_add_info.setStdVPSs(self->vps);
@@ -251,6 +315,8 @@ std::unique_ptr<wivrn::video_encoder_vulkan_h265> wivrn::video_encoder_vulkan_h2
 		self->rate_control->pNext = &self->rate_control_h265;
 	}
 
+	self->rate_control_layer.pNext = &self->rate_control_layer_h265;
+
 	self->init(video_caps, video_profile_info.get(), &session_create_info, &h265_session_params);
 
 	return self;
@@ -269,10 +335,10 @@ std::vector<uint8_t> wivrn::video_encoder_vulkan_h265::get_vps_sps_pps()
 void wivrn::video_encoder_vulkan_h265::send_idr_data()
 {
 	auto data = get_vps_sps_pps();
-	SendData(data, false);
+	SendData(data, false, true);
 }
 
-void * wivrn::video_encoder_vulkan_h265::encode_info_next(uint32_t frame_num, size_t slot, std::optional<size_t> ref)
+void * wivrn::video_encoder_vulkan_h265::encode_info_next(uint32_t frame_num, size_t slot, std::optional<int32_t> ref_slot)
 {
 	slice_header = {
 	        .flags =
@@ -290,8 +356,8 @@ void * wivrn::video_encoder_vulkan_h265::encode_info_next(uint32_t frame_num, si
 	                        .collocated_from_l0_flag = 0,
 	                        .slice_loop_filter_across_slices_enabled_flag = 0,
 	                },
-	        .slice_type = ref ? STD_VIDEO_H265_SLICE_TYPE_P
-	                          : STD_VIDEO_H265_SLICE_TYPE_I,
+	        .slice_type = ref_slot ? STD_VIDEO_H265_SLICE_TYPE_P
+	                               : STD_VIDEO_H265_SLICE_TYPE_I,
 	        .slice_segment_address = 0,
 	        .collocated_ref_idx = 0,
 	        .MaxNumMergeCand = 0,
@@ -326,16 +392,23 @@ void * wivrn::video_encoder_vulkan_h265::encode_info_next(uint32_t frame_num, si
 	std::fill(reference_lists_info.RefPicList1,
 	          reference_lists_info.RefPicList1 + sizeof(reference_lists_info.RefPicList1),
 	          STD_VIDEO_H265_NO_REFERENCE_PICTURE);
-	if (ref)
-	{
-		reference_lists_info.RefPicList0[0] = *ref;
-	}
 
+	int32_t pic_order_cnt_mask = ((1 << (sps.log2_max_pic_order_cnt_lsb_minus4 + 4)) - 1);
+
+	if (ref_slot)
+		reference_lists_info.RefPicList0[0] = *ref_slot;
+
+	short_term_ref_pic_set = StdVideoH265ShortTermRefPicSet{
+	        .use_delta_flag = 1,
+	        .used_by_curr_pic_flag = 1,
+	        .used_by_curr_pic_s0_flag = 1,
+	        .num_negative_pics = 1,
+	};
 	std_picture_info = {
 	        .flags =
 	                {
 	                        .is_reference = 1,
-	                        .IrapPicFlag = uint32_t(ref ? 0 : 1),
+	                        .IrapPicFlag = uint32_t(ref_slot ? 0 : 1),
 	                        .used_for_long_term_reference = 0,
 	                        .discardable_flag = 0,
 	                        .cross_layer_bla_flag = 0,
@@ -344,14 +417,15 @@ void * wivrn::video_encoder_vulkan_h265::encode_info_next(uint32_t frame_num, si
 	                        .short_term_ref_pic_set_sps_flag = 0,
 	                        .slice_temporal_mvp_enabled_flag = 0,
 	                },
-	        .pic_type = ref ? STD_VIDEO_H265_PICTURE_TYPE_P
-	                        : STD_VIDEO_H265_PICTURE_TYPE_IDR,
+	        .pic_type = ref_slot ? STD_VIDEO_H265_PICTURE_TYPE_P
+	                             : STD_VIDEO_H265_PICTURE_TYPE_IDR,
 	        .sps_video_parameter_set_id = 0,
 	        .pps_seq_parameter_set_id = 0,
 	        .pps_pic_parameter_set_id = 0,
 	        .short_term_ref_pic_set_idx = 0,
-	        .PicOrderCntVal = 0,
+	        .PicOrderCntVal = int32_t(frame_num & pic_order_cnt_mask),
 	        .TemporalId = 0,
+	        .pShortTermRefPicSet = &short_term_ref_pic_set,
 	};
 	picture_info = vk::VideoEncodeH265PictureInfoKHR{
 	        .naluSliceSegmentEntryCount = 1,
@@ -359,53 +433,28 @@ void * wivrn::video_encoder_vulkan_h265::encode_info_next(uint32_t frame_num, si
 	        .pStdPictureInfo = &std_picture_info,
 	};
 
-	dpb_std_info[slot].pic_type = std_picture_info.pic_type;
+	auto & i = dpb_std_info[slot];
+	i.pic_type = std_picture_info.pic_type;
+	i.PicOrderCntVal = std_picture_info.PicOrderCntVal;
 
-	if (not ref)
-		++idr_id;
+	if (ref_slot)
+	{
+		auto ref_frame = dpb_std_info[*ref_slot].PicOrderCntVal;
+		if (((ref_frame + 1) & pic_order_cnt_mask) != i.PicOrderCntVal)
+		{
+			reference_lists_info.flags.ref_pic_list_modification_flag_l0 = 1;
+			reference_lists_info.list_entry_l0[0] = (i.PicOrderCntVal - ref_frame - 1) & pic_order_cnt_mask;
+		}
+	}
 
 	return &picture_info;
 }
 vk::ExtensionProperties wivrn::video_encoder_vulkan_h265::std_header_version()
 {
-	// FIXME: update to version 1.0
 	vk::ExtensionProperties std_header_version{
-	        .specVersion = 0x0000900b, // VK_MAKE_VIDEO_STD_VERSION(1, 0, 0),
+	        .specVersion = VK_MAKE_VIDEO_STD_VERSION(1, 0, 0),
 	};
 	strcpy(std_header_version.extensionName,
 	       VK_STD_VULKAN_VIDEO_CODEC_H265_ENCODE_EXTENSION_NAME);
 	return std_header_version;
 }
-
-decltype(wivrn::video_encoder_vulkan_h265::video_profile_info) wivrn::video_encoder_vulkan_h265::video_profile_info = vk::StructureChain{
-        vk::VideoProfileInfoKHR{
-                .videoCodecOperation =
-                        vk::VideoCodecOperationFlagBitsKHR::eEncodeH265,
-                .chromaSubsampling = vk::VideoChromaSubsamplingFlagBitsKHR::e420,
-                .lumaBitDepth = vk::VideoComponentBitDepthFlagBitsKHR::e8,
-                .chromaBitDepth = vk::VideoComponentBitDepthFlagBitsKHR::e8,
-        },
-        vk::VideoEncodeH265ProfileInfoKHR{
-                .stdProfileIdc = STD_VIDEO_H265_PROFILE_IDC_MAIN,
-        },
-        vk::VideoEncodeUsageInfoKHR{
-                .videoUsageHints = vk::VideoEncodeUsageFlagBitsKHR::eStreaming,
-                .videoContentHints = vk::VideoEncodeContentFlagBitsKHR::eRendered,
-                .tuningMode = vk::VideoEncodeTuningModeKHR::eUltraLowLatency,
-        }};
-vk::StructureChain video_profile_info{
-        vk::VideoProfileInfoKHR{
-                .videoCodecOperation =
-                        vk::VideoCodecOperationFlagBitsKHR::eEncodeH265,
-                .chromaSubsampling = vk::VideoChromaSubsamplingFlagBitsKHR::e420,
-                .lumaBitDepth = vk::VideoComponentBitDepthFlagBitsKHR::e8,
-                .chromaBitDepth = vk::VideoComponentBitDepthFlagBitsKHR::e8,
-        },
-        vk::VideoEncodeH265ProfileInfoKHR{
-                .stdProfileIdc = STD_VIDEO_H265_PROFILE_IDC_MAIN,
-        },
-        vk::VideoEncodeUsageInfoKHR{
-                .videoUsageHints = vk::VideoEncodeUsageFlagBitsKHR::eStreaming,
-                .videoContentHints = vk::VideoEncodeContentFlagBitsKHR::eRendered,
-                .tuningMode = vk::VideoEncodeTuningModeKHR::eUltraLowLatency,
-        }};

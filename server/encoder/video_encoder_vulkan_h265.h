@@ -28,7 +28,8 @@ namespace wivrn
 {
 class video_encoder_vulkan_h265 : public video_encoder_vulkan
 {
-	uint16_t idr_id = 0;
+	StdVideoH265DecPicBufMgr dec_pic_buf_mgr;
+	StdVideoH265ProfileTierLevel tier_level;
 	StdVideoH265VideoParameterSet vps;
 	StdVideoH265SequenceParameterSet sps;
 	StdVideoH265PictureParameterSet pps;
@@ -36,6 +37,7 @@ class video_encoder_vulkan_h265 : public video_encoder_vulkan
 	StdVideoEncodeH265SliceSegmentHeader slice_header;
 	vk::VideoEncodeH265NaluSliceSegmentInfoKHR nalu_slice_info;
 
+	StdVideoH265ShortTermRefPicSet short_term_ref_pic_set;
 	StdVideoEncodeH265PictureInfo std_picture_info;
 	vk::VideoEncodeH265PictureInfoKHR picture_info;
 
@@ -46,13 +48,20 @@ class video_encoder_vulkan_h265 : public video_encoder_vulkan
 
 	vk::VideoEncodeH265GopRemainingFrameInfoKHR gop_info;
 	vk::VideoEncodeH265RateControlInfoKHR rate_control_h265;
+	vk::VideoEncodeH265RateControlLayerInfoKHR rate_control_layer_h265;
 
-	video_encoder_vulkan_h265(wivrn_vk_bundle & vk, vk::Rect2D rect, vk::VideoEncodeCapabilitiesKHR encode_caps, float fps, uint64_t bitrate);
+	video_encoder_vulkan_h265(wivrn_vk_bundle & vk,
+	                          vk::Rect2D rect,
+	                          const vk::VideoCapabilitiesKHR & video_caps,
+	                          const vk::VideoEncodeCapabilitiesKHR & encode_caps,
+	                          float fps,
+	                          uint8_t stream_idx,
+	                          const encoder_settings & settings);
 
 protected:
 	std::vector<void *> setup_slot_info(size_t dpb_size) override;
 
-	void * encode_info_next(uint32_t frame_num, size_t slot, std::optional<size_t> ref) override;
+	void * encode_info_next(uint32_t frame_num, size_t slot, std::optional<int32_t>) override;
 	virtual vk::ExtensionProperties std_header_version() override;
 
 	void send_idr_data() override;
@@ -60,10 +69,9 @@ protected:
 public:
 	static std::unique_ptr<video_encoder_vulkan_h265> create(wivrn_vk_bundle & vk,
 	                                                         encoder_settings & settings,
-	                                                         float fps);
+	                                                         float fps,
+	                                                         uint8_t stream_idx);
 
 	std::vector<uint8_t> get_vps_sps_pps();
-
-	static const vk::StructureChain<vk::VideoProfileInfoKHR, vk::VideoEncodeH265ProfileInfoKHR, vk::VideoEncodeUsageInfoKHR> video_profile_info;
 };
 } // namespace wivrn

@@ -169,7 +169,7 @@ std::vector<void *> wivrn::video_encoder_vulkan_h264::setup_slot_info(size_t dpb
 	return res;
 }
 
-auto get_video_caps(vk::raii::PhysicalDevice & phys_dev)
+static auto get_video_caps(vk::raii::PhysicalDevice & phys_dev)
 {
 	vk::StructureChain video_profile_info{
 	        vk::VideoProfileInfoKHR{

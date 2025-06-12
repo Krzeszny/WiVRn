@@ -40,7 +40,7 @@
 #endif
 #if WIVRN_USE_VULKAN_ENCODE
 #include "video_encoder_vulkan_h264.h"
-// #include "video_encoder_vulkan_h265.h"
+#include "video_encoder_vulkan_h265.h"
 #endif
 
 namespace wivrn
@@ -121,9 +121,8 @@ std::unique_ptr<video_encoder> video_encoder::create(
 				res = video_encoder_vulkan_h264::create(wivrn_vk, settings, fps, stream_idx);
 				break;
 			case video_codec::h265:
-				throw std::runtime_error("h265 not supported for vulkan video encode");
-				// res = video_encoder_vulkan_h265::create(wivrn_vk, settings, fps);
-				// break;
+				res = video_encoder_vulkan_h265::create(wivrn_vk, settings, fps, stream_idx);
+				break;
 			case video_codec::av1:
 				throw std::runtime_error("av1 not supported for vulkan video encode");
 		}

@@ -227,7 +227,7 @@ void wivrn::video_encoder_vulkan::init(const vk::VideoCapabilitiesKHR & video_ca
 		                .maxCodedExtent = rect.extent,
 		                .referencePictureFormat = reference_picture_format.format,
 		                .maxDpbSlots = num_dpb_slots,
-		                .maxActiveReferencePictures = 2,
+		                .maxActiveReferencePictures = 1,
 		                .pStdHeaderVersion = &std_header_version,
 		        });
 
