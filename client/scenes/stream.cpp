@@ -665,7 +665,10 @@ void scenes::stream::update_gui_position(xr::spaces controller)
 	        predicted_display_time);
 
 	if (not aim)
+	{
+		spdlog::warn("Unable to locate aim to move GUI");
 		return;
+	}
 
 	auto [offset_position, offset_orientation] = input->offset[controller];
 
