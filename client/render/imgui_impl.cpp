@@ -53,6 +53,10 @@
 #include <fontconfig/fontconfig.h>
 #endif
 
+#if WIVRN_CLIENT_IMGUI_TEST
+#include "imgui_te_engine.h"
+#endif
+
 /* Do not use:
  *
  * ImGui_ImplVulkanH_SelectSurfaceFormat
@@ -325,6 +329,11 @@ imgui_context::imgui_context(
         context(ImGui::CreateContext()),
         plot_context(ImPlot::CreateContext()),
         io((ImGui::SetCurrentContext(context), ImGui::GetIO())),
+#if WIVRN_CLIENT_IMGUI_TEST
+        test_engine(ImGuiTestEngine_CreateContext()),
+        test_io(ImGuiTestEngine_GetIO(test_engine)),
+#endif
+
         world(application::space(xr::spaces::world))
 {
 	controllers.reserve(controllers_.size());
@@ -376,6 +385,12 @@ imgui_context::imgui_context(
 	style.WindowBorderSize = 0;
 	style.DisabledAlpha = 0.2;
 	style.Colors[ImGuiCol_ModalWindowDimBg] = {0, 0, 0, 0};
+
+#if WIVRN_CLIENT_IMGUI_TEST
+	test_io.ConfigVerboseLevel = ImGuiTestVerboseLevel_Debug;
+	test_io.ConfigVerboseLevelOnError = ImGuiTestVerboseLevel_Debug;
+	ImGuiTestEngine_Start(test_engine, context);
+#endif
 }
 
 #ifdef __ANDROID__
@@ -1001,6 +1016,11 @@ imgui_context::~imgui_context()
 {
 	ImGui::SetCurrentContext(context);
 	ImPlot::SetCurrentContext(plot_context);
+
+#if WIVRN_CLIENT_IMGUI_TEST
+	// May block until TestFunc thread/coroutine joins
+	ImGuiTestEngine_Stop(test_engine);
+#endif
 
 	std::vector<vk::Fence> fences;
 
