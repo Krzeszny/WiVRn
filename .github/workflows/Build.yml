@@ -215,7 +215,7 @@ jobs:
       # Disable XRT_FEATURE_OPENXR_VISIBILITY_MASK because of https://gitlab.freedesktop.org/monado/monado/-/issues/480
       run: |
         mkdir monado
-        curl https://gitlab.freedesktop.org/Meumeu/monado/-/archive/5bdb51697685320e3f5d494210f25fb2967c9fc3/monado-main.tar.gz | tar -xz -C monado --strip-components=1
+        curl https://gitlab.freedesktop.org/Meumeu/monado/-/archive/733cc93e9ace4e6f21d9a48bb32f14c794e268ed/monado-main.tar.gz | tar -xz -C monado --strip-components=1
         patch --directory=${{github.workspace}}/monado --strip=1 < ${{github.workspace}}/patches/monado-ci/0001-remote-resolution.patch
 
         DRIVERS=$(grep -oE "XRT_BUILD_DRIVER_[A-Z0-9_]*" monado/CMakeLists.txt | sort -u  | grep -v XRT_BUILD_DRIVER_REMOTE | sed 's/\(.*\)/-D\1=OFF/')
@@ -266,7 +266,6 @@ jobs:
           WIVRN_PID=$!
           sleep 10
           ${{github.workspace}}/build-monado/src/xrt/targets/remotectl/monado-remotectl 127.0.0.1 4242 < ${{github.workspace}}/.github/screenshot-script.txt
-          killall wivrn
           wait $WIVRN_PID || true
         done
 

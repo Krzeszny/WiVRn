@@ -2,113 +2,97 @@
 set left hand_tracking_active false
 set right hand_tracking_active false
 
-# Reset positions
-set head position 0.0 1.5 0.2
-set head rotation 0.0 0.0 0.0 1.0
-set left position -0.2 1.3 -0.3
-set left rotation 0.4 0 0 0.9
-set right position 0.2 1.3 -0.3
-set right rotation 0.4 0 0 0.9
+# Recenter GUI
+set head position -0.0730242 1.16808 0.230658
+set head rotation 0 -0.928815 -0.0904264 0.35934
+set right position 0.0983284 0.910746 0.582902
+set right rotation -0.0909294 -0.911002 0.0876865 0.392579
+sleep 10
+set right squeeze_value 1
+sleep 10
 
-# Server list
-set right direction -1.8 1.55 -1
-sleep 1
+set head position -0.0719216 1.16766 0.231068
+set head rotation 0 -0.928723 -0.0914345 0.359324
+set right position 0.098422 0.911032 0.582897
+set right rotation -0.0891797 -0.910514 0.0841529 0.394878
+sleep 10
+set right squeeze_value 0
+sleep 10
+
+
+# Position views correctly
+set head position 0.14 1.1 0.45
+set head direction 1 -0.5 1.5
+
+# Take pictures
+
+set right position 0.0898211 0.973516 0.495564
+set right rotation -0.0201006 -0.852445 0.180254 0.490349
+sleep 10
 set right trigger_value 1
-sleep 1
+sleep 10
 set right trigger_value 0
-sleep 1
+sleep 10
 exec grim -g "0,0 2560x1440" ${LANG}/screenshot-01-list.png
 
-
-# Connect to the first server
-set right direction 0.2 1.42 -1
-sleep 1
+set right position 0.0793772 0.974115 0.52155
+set right rotation -0.0157553 -0.87056 0.173162 0.460317
+sleep 10
 set right trigger_value 1
-sleep 1
+sleep 10
 set right trigger_value 0
-sleep 5
-exec grim -g "0,0 2560x1440" ${LANG}/screenshot-02-connect.png
+sleep 10
+exec grim -g "0,0 2560x1440" ${LANG}/screenshot-02-add-server.png
 
-# Cancel
-set right direction -0.3 1.25 -1
-sleep 1
+set right position 0.134207 0.87987 0.542181
+set right rotation -0.0906409 -0.863626 0.0619859 0.492029
+sleep 10
 set right trigger_value 1
-sleep 1
+sleep 10
 set right trigger_value 0
-sleep 1
+sleep 10
 
-
-# Add server
-set right direction -1.45 1.55 -1
-sleep 1
+set right position 0.0961764 0.964042 0.493578
+set right rotation -0.0254608 -0.845734 0.166681 0.506264
+sleep 10
 set right trigger_value 1
-sleep 1
+sleep 10
 set right trigger_value 0
-sleep 1
-set right rotation 0.4 0 0 0.9
+sleep 10
+exec grim -g "0,0 2560x1440" ${LANG}/screenshot-03-settings.png
 
-set head position 0.0 1.5 0.5
-set left position -0.2 1.4 0.2
-set left direction -0.1 -0.3 -1
-set right position 0.2 1.4 0.2
-set right direction -0.1 -0.3 -1
-
-sleep 1
-exec grim -g "0,0 2560x1440" ${LANG}/screenshot-03-add-server.png
-set head position 0.0 1.5 0.2
-set left position -0.2 1.3 -0.3
-set left rotation 0.4 0 0 0.9
-set right position 0.2 1.3 -0.3
-set right rotation 0.4 0 0 0.9
-
-
-# Cancel
-set right direction -2.2 1.05 -1
-sleep 1
+set right position 0.100854 0.957601 0.491042
+set right rotation -0.0367615 -0.840207 0.159564 0.516953
+sleep 10
 set right trigger_value 1
-sleep 1
+sleep 10
 set right trigger_value 0
-sleep 1
+sleep 10
+exec grim -g "0,0 2560x1440" ${LANG}/screenshot-04-post-process.png
 
-
-# Settings
-set right direction -1.9 1.5 -1
-sleep 1
+set right position 0.163004 0.840617 0.50287
+set right rotation -0.134239 -0.824003 0.0384474 0.549109
+sleep 10
 set right trigger_value 1
-sleep 1
+sleep 10
 set right trigger_value 0
-sleep 1
-set right rotation 0.4 0 0 0.9
-sleep 1
-exec grim -g "0,0 2560x1440" ${LANG}/screenshot-04-settings.png
+sleep 10
 
-# Post-processing
-set right direction -1.95 1.45 -1
-sleep 1
+set right position 0.167308 0.826478 0.503044
+set right rotation -0.14699 -0.818609 0.0252899 0.554648
+sleep 10
 set right trigger_value 1
-sleep 1
+sleep 10
 set right trigger_value 0
-sleep 1
-set right rotation 0.4 0 0 0.9
-sleep 1
-exec grim -g "0,0 2560x1440" ${LANG}/screenshot-07-post-processing.png
+sleep 10
+exec grim -g "0,0 2560x1440" ${LANG}/screenshot-05-licences.png
 
-# About
-set right direction -2.4 0.45 -1
-sleep 1
-set right trigger_value 1
-sleep 1
-set right trigger_value 0
-sleep 1
-set right rotation 0.4 0 0 0.9
-sleep 1
-exec grim -g "0,0 2560x1440" ${LANG}/screenshot-05-about.png
 
-# Licences
-set right direction -2.4  0.32 -1
-sleep 1
+# Exit
+set right position 0.169269 0.814705 0.505913
+set right rotation -0.158897 -0.81736 0.014047 0.553605
+sleep 10
 set right trigger_value 1
-sleep 1
+sleep 10
 set right trigger_value 0
-sleep 1
-exec grim -g "0,0 2560x1440" ${LANG}/screenshot-06-licence.png
+sleep 10
