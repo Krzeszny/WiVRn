@@ -71,6 +71,7 @@ public:
 	        vk::raii::PhysicalDevice & physical_device,
 	        image_allocation & input_image,
 	        std::vector<vk::Image> output_images,
+	        std::vector<vk::Image> foveation_images,
 	        vk::Extent2D output_extent,
 	        vk::Format format);
 

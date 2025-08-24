@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "xr/foveation_profile.h"
 #define IMGUI_DEFINE_MATH_OPERATORS
 
 #include "stream.h"
@@ -595,6 +596,9 @@ void scenes::stream::gui_foveation_settings(float predicted_display_period)
 		override_foveation_pitch = config.override_foveation_pitch;
 		override_foveation_distance = config.override_foveation_distance;
 	}
+
+	if ((not swapchain.images().empty()) and swapchain.images().front().foveation)
+		swapchain.update_foveation(make_foveation_profile());
 
 	network_session->send_control(from_headset::override_foveation_center{
 	        .enabled = override_foveation_enable,

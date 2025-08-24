@@ -29,6 +29,7 @@
 #include "wifi_lock.h"
 #include "wivrn_client.h"
 #include "wivrn_packets.h"
+#include "xr/foveation_profile.h"
 #include "xr/space.h"
 #include <mutex>
 #include <shared_mutex>
@@ -317,6 +318,7 @@ private:
 	void gui_compact_view();
 	void gui_settings();
 	void gui_foveation_settings(float predicted_display_period);
+	xr::foveation_profile make_foveation_profile();
 	void draw_gui(XrTime predicted_display_time, XrDuration predicted_display_period);
 };
 } // namespace scenes

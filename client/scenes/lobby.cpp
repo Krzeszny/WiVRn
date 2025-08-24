@@ -907,7 +907,7 @@ void scenes::lobby::on_focused()
 	                .z_index = constants::lobby::zindex_recenter_tip,
 	        }};
 
-	swapchain_imgui = xr::swapchain(session, device, swapchain_format, 3000, 1300);
+	swapchain_imgui = xr::swapchain(instance, session, device, swapchain_format, 3000, 1300);
 
 	imgui_ctx.emplace(physical_device, device, queue_family_index, queue, imgui_inputs, swapchain_imgui, vps);
 

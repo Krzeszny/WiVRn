@@ -20,6 +20,7 @@
 #include "xr/body_tracker.h"
 #include "xr/face_tracker.h"
 #include "xr/fb_face_tracker2.h"
+#include "xr/foveation_profile.h"
 #include "xr/space.h"
 #include <glm/gtc/matrix_access.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -445,6 +446,7 @@ void scenes::stream::on_focused()
 	};
 
 	swapchain_imgui = xr::swapchain(
+	        instance,
 	        session,
 	        device,
 	        swapchain_format,
@@ -1378,10 +1380,10 @@ void scenes::stream::setup_reprojection_swapchain(uint32_t swapchain_width, uint
 	const uint32_t video_width = video_stream_description->width / view_count;
 	const uint32_t video_height = video_stream_description->height;
 
-	const configuration::sgsr_settings sgsr = application::get_config().sgsr;
-	if (sgsr.enabled)
+	const auto & config = application::get_config();
+	if (config.sgsr.enabled)
 	{
-		const float upscaling_factor = sgsr.upscaling_factor;
+		const float upscaling_factor = config.sgsr.upscaling_factor;
 		spdlog::info("Using SGSR with an upscale factor of {}", upscaling_factor);
 		swapchain_width *= upscaling_factor;
 		swapchain_height *= upscaling_factor;
@@ -1389,7 +1391,23 @@ void scenes::stream::setup_reprojection_swapchain(uint32_t swapchain_width, uint
 
 	auto views = system.view_configuration_views(viewconfig);
 
-	swapchain = xr::swapchain(session, device, swapchain_format, swapchain_width, swapchain_height, 1, views.size());
+	std::optional<xr::foveation_profile> foveation;
+	if (
+	        instance.has_extension(XR_FB_FOVEATION_VULKAN_EXTENSION_NAME) and
+	        instance.has_extension(XR_FB_FOVEATION_CONFIGURATION_EXTENSION_NAME) and
+	        not(utils::contains(application::get_vk_device_extensions(), VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME)))
+		foveation = make_foveation_profile();
+
+	swapchain = xr::swapchain(instance,
+	                          session,
+	                          device,
+	                          swapchain_format,
+	                          swapchain_width,
+	                          swapchain_height,
+	                          1,
+	                          views.size(),
+	                          foveation ? XrFoveationProfileFB(*foveation) : XR_NULL_HANDLE);
+
 	spdlog::info("Created stream swapchain: {}x{}", swapchain.width(), swapchain.height());
 	for (auto view: views)
 	{
@@ -1400,14 +1418,20 @@ void scenes::stream::setup_reprojection_swapchain(uint32_t swapchain_width, uint
 	spdlog::info("Initializing reprojector");
 	vk::Extent2D extent = {(uint32_t)swapchain.width(), (uint32_t)swapchain.height()};
 	std::vector<vk::Image> swapchain_images;
+	std::vector<vk::Image> foveation_images;
 	for (auto & image: swapchain.images())
+	{
 		swapchain_images.push_back(image.image);
+		if (image.foveation)
+			foveation_images.push_back(image.foveation);
+	}
 
 	reprojector.emplace(
 	        device,
 	        physical_device,
 	        decoder_out_image,
 	        swapchain_images,
+	        foveation_images,
 	        extent,
 	        swapchain.format());
 }
@@ -1529,4 +1553,14 @@ void scenes::stream::on_xr_event(const xr::event & event)
 		default:
 			break;
 	}
+}
+
+xr::foveation_profile scenes::stream::make_foveation_profile()
+{
+	float pitch = override_foveation_enable ? (-override_foveation_pitch * 180 / M_PI) : -10;
+	return xr::foveation_profile(instance,
+	                             session,
+	                             XR_FOVEATION_LEVEL_HIGH_FB,
+	                             pitch,
+	                             false);
 }

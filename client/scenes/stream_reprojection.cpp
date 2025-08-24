@@ -71,6 +71,7 @@ stream_reprojection::stream_reprojection(
         vk::raii::PhysicalDevice & physical_device,
         image_allocation & input_image,
         std::vector<vk::Image> output_images_,
+        std::vector<vk::Image> foveation_images,
         vk::Extent2D output_extent,
         vk::Format format) :
         view_count(input_image.info().arrayLayers),
@@ -189,13 +190,23 @@ stream_reprojection::stream_reprojection(
 	        .layout = vk::ImageLayout::eColorAttachmentOptimal,
 	};
 
-	vk::AttachmentDescription attachment{
-	        .format = format,
-	        .samples = vk::SampleCountFlagBits::e1,
-	        .loadOp = vk::AttachmentLoadOp::eDontCare,
-	        .storeOp = vk::AttachmentStoreOp::eStore,
-	        .initialLayout = vk::ImageLayout::eColorAttachmentOptimal,
-	        .finalLayout = vk::ImageLayout::eColorAttachmentOptimal,
+	std::array attachments{
+	        vk::AttachmentDescription{
+	                .format = format,
+	                .samples = vk::SampleCountFlagBits::e1,
+	                .loadOp = vk::AttachmentLoadOp::eDontCare,
+	                .storeOp = vk::AttachmentStoreOp::eStore,
+	                .initialLayout = vk::ImageLayout::eColorAttachmentOptimal,
+	                .finalLayout = vk::ImageLayout::eColorAttachmentOptimal,
+	        },
+	        vk::AttachmentDescription{
+	                .format = vk::Format::eR8G8Unorm,
+	                .samples = vk::SampleCountFlagBits::e1,
+	                .loadOp = vk::AttachmentLoadOp::eLoad,
+	                .storeOp = vk::AttachmentStoreOp::eDontCare,
+	                .initialLayout = vk::ImageLayout::eFragmentDensityMapOptimalEXT,
+	                .finalLayout = vk::ImageLayout::eFragmentDensityMapOptimalEXT,
+	        },
 	};
 
 	vk::SubpassDescription subpass{
@@ -205,12 +216,23 @@ stream_reprojection::stream_reprojection(
 
 	vk::StructureChain renderpass_info{
 	        vk::RenderPassCreateInfo{
-	                .attachmentCount = 1,
-	                .pAttachments = &attachment,
+	                .attachmentCount = attachments.size(),
+	                .pAttachments = attachments.data(),
 	                .subpassCount = 1,
 	                .pSubpasses = &subpass,
 	        },
+	        vk::RenderPassFragmentDensityMapCreateInfoEXT{
+	                .fragmentDensityMapAttachment = {
+	                        .attachment = 1,
+	                        .layout = vk::ImageLayout::eFragmentDensityMapOptimalEXT,
+	                },
+	        },
 	};
+	if (foveation_images.empty())
+	{
+		renderpass_info.unlink<vk::RenderPassFragmentDensityMapCreateInfoEXT>();
+		renderpass_info.get().attachmentCount--;
+	}
 
 	renderpass = vk::raii::RenderPass(device, renderpass_info.get());
 
@@ -363,22 +385,16 @@ stream_reprojection::stream_reprojection(
 	pipeline = vk::raii::Pipeline(device, application::get_pipeline_cache(), pipeline_info);
 
 	// Create image views and framebuffers
-	output_image_views.reserve(output_images.size() * view_count);
+	output_image_views.reserve(output_images.size() * view_count * (foveation_images.empty() ? 1 : 2));
 	framebuffers.reserve(output_images.size() * view_count);
-	for (vk::Image image: output_images)
+	for (size_t i = 0; i < output_images.size(); ++i)
 	{
 		for (uint32_t view = 0; view < view_count; ++view)
 		{
 			vk::ImageViewCreateInfo iv_info{
-			        .image = image,
-			        .viewType = vk::ImageViewType::e2DArray,
+			        .image = output_images[i],
+			        .viewType = vk::ImageViewType::e2D,
 			        .format = format,
-			        .components = {
-			                .r = vk::ComponentSwizzle::eIdentity,
-			                .g = vk::ComponentSwizzle::eIdentity,
-			                .b = vk::ComponentSwizzle::eIdentity,
-			                .a = vk::ComponentSwizzle::eIdentity,
-			        },
 			        .subresourceRange = {
 			                .aspectMask = vk::ImageAspectFlagBits::eColor,
 			                .baseMipLevel = 0,
@@ -388,15 +404,24 @@ stream_reprojection::stream_reprojection(
 			        },
 			};
 
-			output_image_views.emplace_back(device, iv_info);
+			std::array<vk::ImageView, 2> attachments;
+
+			attachments[0] = *output_image_views.emplace_back(device, iv_info);
+			if (not foveation_images.empty())
+			{
+				iv_info.image = foveation_images[i];
+				iv_info.format = vk::Format::eR8G8Unorm;
+				attachments[1] = *output_image_views.emplace_back(device, iv_info);
+			}
 
 			vk::FramebufferCreateInfo fb_create_info{
 			        .renderPass = *renderpass,
+			        .attachmentCount = foveation_images.empty() ? 1u : 2u,
+			        .pAttachments = attachments.data(),
 			        .width = output_extent.width,
 			        .height = output_extent.height,
 			        .layers = 1,
 			};
-			fb_create_info.setAttachments(*output_image_views.back());
 
 			framebuffers.emplace_back(device, fb_create_info);
 		}
