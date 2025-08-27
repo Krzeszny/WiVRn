@@ -370,9 +370,6 @@ void scenes::stream::tracking()
 
 	XrSpace view_space = application::space(xr::spaces::view);
 	XrSpace world_space = application::space(xr::spaces::world);
-	XrDuration tracking_period = min_tracking_period;     // target period for 20% busy time
-	XrDuration current_tracking_period = tracking_period; // divider of frame period
-	int period_adjust = 0;
 
 	XrTime t0 = instance.now();
 	XrTime last_hand_sample = t0;
@@ -415,7 +412,6 @@ void scenes::stream::tracking()
 			// If thread can't keep up, skip timestamps
 			t0 = std::max(t0, now);
 
-			timer t(instance);
 			int samples = 0;
 
 			auto control = *tracking_control.lock();
@@ -558,10 +554,6 @@ void scenes::stream::tracking()
 				}
 			}
 
-			XrDuration busy_time = t.count();
-			// Target: polling between 1 and 5ms, with 20% busy time
-			tracking_period = std::clamp<XrDuration>(std::lerp(tracking_period, busy_time * 5, 0.1), min_tracking_period, max_tracking_period);
-
 #ifdef __ANDROID__
 			if (next_battery_check < now and control.enabled[size_t(tid::battery)])
 			{
@@ -630,18 +622,7 @@ void scenes::stream::tracking()
 			for (auto & item: merged_tracking)
 				std::ranges::move(item.items, std::back_inserter(tracking_pool));
 
-			if (period_adjust == 0)
-			{
-				if (auto p = real_display_period.load())
-				{
-					period_adjust = (p / tracking_period);
-					current_tracking_period = p / period_adjust;
-				}
-			}
-			else
-				--period_adjust;
-
-			t0 += current_tracking_period;
+			t0 += period / 3;
 		}
 		catch (std::exception & e)
 		{
