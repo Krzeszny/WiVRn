@@ -1237,7 +1237,7 @@ void scene_loader::clear_texture_cache()
 			catch (std::exception & e)
 			{
 				// If the index file is not found, remove the cache
-				spdlog::info("{}: cannot open index.json ({}), removing cache directory", entry.path().native(), e.what());
+				spdlog::info("{}: removing cache directory", entry.path().native());
 				std::error_code ec;
 				std::filesystem::remove_all(entry.path(), ec);
 				continue;
@@ -1251,7 +1251,7 @@ void scene_loader::clear_texture_cache()
 			}
 			catch (std::exception & e)
 			{
-				spdlog::info("{}: cannot open {} ({}), removing cache directory", entry.path().native(), saved_filename, e.what());
+				spdlog::info("{}: removing cache directory", entry.path().native());
 				std::error_code ec;
 				std::filesystem::remove_all(entry.path(), ec);
 				continue;
@@ -1259,7 +1259,7 @@ void scene_loader::clear_texture_cache()
 
 			if (real_size != saved_size)
 			{
-				spdlog::info("{}: wrong size for {} (cache: {}, current: {}), removing cache directory", entry.path().native(), saved_filename, saved_size, real_size);
+				spdlog::info("{}: removing cache directory", entry.path().native());
 				std::error_code ec;
 				std::filesystem::remove_all(entry.path(), ec);
 				continue;
@@ -1273,7 +1273,7 @@ void scene_loader::clear_texture_cache()
 
 				if (timestamp != saved_timestamp)
 				{
-					spdlog::info("{}: wrong timestamp for {} (cache: {}, current: {}), removing cache directory", entry.path().native(), saved_filename, saved_timestamp, timestamp);
+					spdlog::info("{}: removing cache directory", entry.path().native());
 					std::error_code ec;
 					std::filesystem::remove_all(entry.path(), ec);
 					continue;
