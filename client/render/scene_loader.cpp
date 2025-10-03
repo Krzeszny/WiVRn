@@ -184,7 +184,7 @@ void copy_vertex_attributes(
         const fastgltf::Primitive & primitive,
         std::string attribute_name,
         std::vector<renderer::vertex> & vertices,
-        T renderer::vertex::*attribute)
+        T renderer::vertex::* attribute)
 {
 	using U = T::value_type;
 	constexpr size_t N = std::tuple_size_v<T>;
@@ -214,7 +214,7 @@ void copy_vertex_attributes(
         const fastgltf::Primitive & primitive,
         std::string attribute_name,
         std::vector<renderer::vertex> & vertices,
-        T renderer::vertex::*attribute)
+        T renderer::vertex::* attribute)
 {
 	auto it = primitive.findAttribute(attribute_name);
 
